@@ -1,15 +1,15 @@
-pragma solidity ^0.4.24;
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.0;
 
-import "openzeppelin-solidity/contracts/ownership/Ownable.sol";
+import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 import "./interface/IRegistry.sol";
 import "./interface/IGov.sol";
-
 
 /**
  * @title GovChecker
  * @dev GovChecker Contract that uses Registry contract
  */
-contract GovChecker is Ownable {
+contract GovChecker is OwnableUpgradeable {
     IRegistry public reg;
 
     bytes32 public constant GOV_NAME = "GovernanceContract";
@@ -18,15 +18,20 @@ contract GovChecker is Ownable {
     bytes32 public constant ENV_STORAGE_NAME = "EnvStorage";
     bytes32 public constant REWARD_POOL_NAME = "RewardPool";
     bytes32 public constant MAINTENANCE_NAME = "Maintenance";
+    bytes32 public constant ECOSYSTEM_NAME = "Ecosystem";
+    bytes32 public constant STAKING_REWARD_NAME = "StakingReward";
 
-    /**
+    /*
      * @dev Function to set registry address. Contract that wants to use registry should setRegistry first.
      * @param _addr address of registry
      * @return A boolean that indicates if the operation was successful.
      */
+    event SetRegistry(address indexed addr); 
+    
     function setRegistry(address _addr) public onlyOwner {
         require(_addr != address(0), "Address should be non-zero");
         reg = IRegistry(_addr);
+        emit SetRegistry(_addr);
     }
     
     modifier onlyGov() {
@@ -36,6 +41,11 @@ contract GovChecker is Ownable {
 
     modifier onlyGovMem() {
         require(IGov(getGovAddress()).isMember(msg.sender), "No Permission");
+        _;
+    }
+
+    modifier onlyGovStaker() {
+        require(IGov(getGovAddress()).isStaker(msg.sender), "No Permission");
         _;
     }
 
@@ -66,5 +76,17 @@ contract GovChecker is Ownable {
 
     function getRewardPoolAddress() internal view returns (address) {
         return getContractAddress(REWARD_POOL_NAME);
+    }
+    
+    function getEcosystemAddress() internal view returns (address) {
+        return getContractAddress(ECOSYSTEM_NAME);
+    }
+
+    function getStakingRewardAddress() internal view returns (address) {
+        return getContractAddress(STAKING_REWARD_NAME);
+    }
+
+    function getMaintenanceAddress() internal view returns (address) {
+        return getContractAddress(MAINTENANCE_NAME);
     }
 }

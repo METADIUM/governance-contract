@@ -1,7 +1,8 @@
-pragma solidity ^0.4.24;
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.0;
 
-import "openzeppelin-solidity/contracts/ownership/Ownable.sol";
-
+import "@openzeppelin/contracts/access/Ownable.sol";
+import "./interface/IRegistry.sol";
 
 /**
  * @title Registry
@@ -10,7 +11,7 @@ import "openzeppelin-solidity/contracts/ownership/Ownable.sol";
  *      Not only contract address but also general address can be set in this contract.
  *      Owner should set domain and permission.
  */
-contract Registry is Ownable {
+contract Registry is Ownable, IRegistry {
     // "Metadium Registry"
     uint public magic = 0x4d6574616469756d205265676973747279;
     uint public modifiedBlock;
@@ -21,7 +22,9 @@ contract Registry is Ownable {
     event SetContractDomain(address setter, bytes32 indexed name, address indexed addr);
     event SetPermission(bytes32 indexed _contract, address indexed granted, bool status);
 
-    /**
+    constructor() Ownable(){}
+    
+    /*
      * @dev Function to set contract(can be general address) domain
      *      Only owner can use this function
      * @param _name name
@@ -37,18 +40,18 @@ contract Registry is Ownable {
         return true;
     }
 
-    /**
+    /*
      * @dev Function to get contract(can be general address) address
      *      Anyone can use this function
      * @param _name _name
      * @return An address of the _name
      */
-    function getContractAddress(bytes32 _name) public view returns (address addr) {
+    function getContractAddress(bytes32 _name) public override view returns (address addr) {
         require(contracts[_name] != address(0x0), "address should be non-zero");
         return contracts[_name];
     }
     
-    /**
+    /*
      * @dev Function to set permission on contract
      *      using modifier 'permissioned' references mapping variable 'permissions'
      *      Only owner can use this function
@@ -66,7 +69,7 @@ contract Registry is Ownable {
         return true;
     }
 
-    /**
+    /*
      * @dev Function to get permission on contract
      *      using modifier 'permissioned' references mapping variable 'permissions'
      * @param _contract contract name
