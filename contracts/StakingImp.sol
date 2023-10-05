@@ -71,7 +71,9 @@ contract StakingImp is GovChecker, UUPSUpgradeable, ReentrancyGuardUpgradeable, 
     }
 
     receive() external payable {
-        revert();
+        if (msg.sender != owner()) {
+            revert();
+        }
     }
 
     /**
