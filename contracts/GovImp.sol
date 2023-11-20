@@ -1267,7 +1267,7 @@ contract GovImp is
         bytes memory enode,
         bytes memory ip,
         uint port
-    ) external override {
+    ) external override onlyOwner {
         stakers[id] = staker;
         stakerIdx[stakers[id]] = id;
         voters[id] = voter;
@@ -1302,7 +1302,7 @@ contract GovImp is
         uint256 oldballotLength,
         uint256 oldvoteLength,
         uint256 oldballotInVoting
-    ) external override {
+    ) external override onlyOwner {
         ballotLength = oldballotLength;
         voteLength = oldvoteLength;
         ballotInVoting = oldballotInVoting;
@@ -1310,7 +1310,7 @@ contract GovImp is
 
     function setProposalTimePeriodForMigration(
         uint256 newPeriod
-    ) external override {
+    ) external override onlyOwner {
         proposal_time_period = newPeriod;
     }
 
