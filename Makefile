@@ -49,7 +49,7 @@ build/MetadiumGovernance.js: build_dir npm build/solc build/solc.sh build/gov.so
 build/gov.sol:
 	@if [ ! -f build/gov.sol ]; then \
 		echo '// SPDX-License-Identifier: MIT' > $@; \
-		echo 'pragma solidity ^0.8.0; import "gov/Gov.sol"; import "gov/GovChecker.sol"; import "gov/GovImp.sol"; import "gov/Registry.sol"; import "gov/storage/Staking.sol"; import "gov/StakingImp.sol"; import "gov/storage/BallotStorage.sol"; import "gov/storage/EnvStorage.sol"; import "gov/storage/EnvStorageImp.sol";' >> $@; \
+		echo 'pragma solidity ^0.8.0; import "gov/Gov.sol"; import "gov/GovChecker.sol"; import "gov/GovImp.sol"; import "gov/Registry.sol"; import "gov/storage/Staking.sol"; import "gov/StakingImp.sol"; import "gov/storage/BallotStorage.sol"; import "gov/storage/EnvStorage.sol"; import "gov/storage/EnvStorageImp.sol"; import "gov/TRSList.sol"; import "gov/TRSListImp.sol";' >> $@; \
 	fi
 
 build_dir:
