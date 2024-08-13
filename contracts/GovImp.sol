@@ -1253,7 +1253,7 @@ contract GovImp is
         transferOwnership(oldOwner);
     }
 
-    function migrateFromLegacy(address oldGov) external initializer returns (int256) {
+    function migrateFromLegacy(address oldGov) external initializer onlyOwner returns (int256) {
         __ReentrancyGuard_init();
         __Ownable_init();
 
