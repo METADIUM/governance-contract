@@ -92,6 +92,9 @@ contract GovImp is
                 info.lockAmount <= getMaxStaking(),
             "Invalid lock Amount"
         );
+        require(info.enode.length > 0, "Invalid enode");
+        require(info.memo.length > 0, "Invalid memo");
+        require(info.duration > 0, "Invalid duration");
         _;
     }
 
