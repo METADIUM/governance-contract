@@ -479,8 +479,7 @@ contract GovImp is
         uint256 threshold = getThreshold();
         if (
             accept >= threshold ||
-            reject >= threshold ||
-            (accept + reject) == 10000
+            reject >= threshold
         ) {
             finalizeVote(ballotIdx, ballotType, accept > reject, false);
         }
