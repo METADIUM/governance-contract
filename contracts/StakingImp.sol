@@ -81,16 +81,16 @@ contract StakingImp is GovChecker, UUPSUpgradeable, ReentrancyGuardUpgradeable, 
      */
     function deposit() external override nonReentrant notRevoked payable {
         require(msg.value > 0, "Deposit amount should be greater than zero");
-
         _balance[msg.sender] = _balance[msg.sender] + msg.value;
 
         if(IGov(getGovAddress()).isMember(msg.sender)){
             uint256 minimum_staking = IEnvStorage(getEnvStorageAddress()).getStakingMin();
             //if minimum lock is going higher than current locked value, lock more
             if(minimum_staking > _lockedBalance[msg.sender] && availableBalanceOf(msg.sender) >= (minimum_staking - _lockedBalance[msg.sender])){
-                _lock(msg.sender, minimum_staking - _lockedBalance[msg.sender]);
+                uint256 curLockedBalance = _lockedBalance[msg.sender];
+                _lock(msg.sender, minimum_staking - curLockedBalance);
                 if(ncpStaking != address(0)){
-                    INCPStaking(ncpStaking).ncpDeposit(minimum_staking - _lockedBalance[msg.sender], payable(msg.sender));
+                    INCPStaking(ncpStaking).ncpDeposit(minimum_staking - curLockedBalance, payable(msg.sender));
                 }
             }
         }
