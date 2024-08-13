@@ -25,6 +25,7 @@ contract EnvStorageImp is AEnvStorage, EnvConstants, UUPSUpgradeable, IEnvStorag
         __Ownable_init();
         setRegistry(_registry);
 
+        require(names.length == infos.length, "names and infos arrays must have the same length");
         for(uint i = 0;i<infos.length;i++){
             uint256 temp = getUint(names[i]);
             require(infos[i] !=0 || temp !=0, "invalid variable");
