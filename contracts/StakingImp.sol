@@ -319,7 +319,8 @@ contract StakingImp is GovChecker, UUPSUpgradeable, ReentrancyGuardUpgradeable, 
 
         uint256 minimum_staking = IEnvStorage(getEnvStorageAddress()).getStakingMin();
         uint256 maximum_staking = IEnvStorage(getEnvStorageAddress()).getStakingMax();
-        require(minimum_staking <= _lockedBalance[ncp] && (_lockedBalance[ncp] + userDepositValue) <= maximum_staking, "user should be in staking range");
+        require(minimum_staking <= _lockedBalance[ncp], "ncp lockedBalance should be greater than minimum_staking");
+        require(_lockedBalance[ncp] + userDepositValue <= maximum_staking, "ncp lockedBalance + userDepositValue should be in staking range");
         _lock(ncp, userDepositValue);
 
         _lockedUserBalanceToNCP[ncp][msg.sender] = _lockedUserBalanceToNCP[ncp][msg.sender] + userDepositValue;
