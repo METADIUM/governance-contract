@@ -362,7 +362,7 @@ contract StakingImp is GovChecker, UUPSUpgradeable, ReentrancyGuardUpgradeable, 
         return _totalLockedBalance;
     }
 
-    function migrateFromLegacy(address registry, address oldGov, address oldStaking) external initializer {
+    function migrateFromLegacy(address registry, address oldGov, address oldStaking) external initializer onlyOwner {
         require(registry != address(0) && oldGov != address(0) && oldStaking != address(0), "address is the zero address");
 
         _totalLockedBalance = 0;
