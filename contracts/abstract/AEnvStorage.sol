@@ -35,12 +35,6 @@ abstract contract AEnvStorage is EternalStorage, GovChecker {
         bytes32 indexed _name,
         bytes _value
     );
-
-    event VarableChanged ( 
-        bytes32 indexed _name,
-        uint256 indexed _type,
-        string _value
-    );
    
     /**
      * @dev Allows the owner to set a value for a int variable

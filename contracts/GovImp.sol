@@ -47,6 +47,7 @@ contract GovImp is
     event NotApplicable(uint256 indexed ballotId, string reason);
 
     event SetProposalTimePeriod(uint256 newPeriod);
+    event GovDataMigrated(address indexed from);
 
     struct MemberInfo {
         address staker;
@@ -92,6 +93,9 @@ contract GovImp is
                 info.lockAmount <= getMaxStaking(),
             "Invalid lock Amount"
         );
+        require(info.enode.length > 0, "Invalid enode");
+        require(info.memo.length > 0, "Invalid memo");
+        require(info.duration > 0, "Invalid duration");
         _;
     }
 
@@ -108,7 +112,7 @@ contract GovImp is
         bytes memory ip,
         uint port
     ) public initializer {
-        require(lockAmount > 0, "lockAmount should be more then zero");
+        require(lockAmount >= getMinStaking() && getMaxStaking() >= lockAmount, "Invalid lock amount");
         __ReentrancyGuard_init();
         __Ownable_init();
         setRegistry(registry);
@@ -400,7 +404,7 @@ contract GovImp is
         address newGovAddr,
         bytes memory memo,
         uint256 duration
-    ) external onlyGovMem checkLockedAmount returns (uint256 ballotIdx) {
+    ) external onlyGovMem checkTimePeriod checkLockedAmount returns (uint256 ballotIdx) {
         require(newGovAddr != ZERO, "Implementation cannot be zero");
         require(newGovAddr != _getImplementation(), "Same contract address");
         //check newGov has proxiableUUID
@@ -479,8 +483,7 @@ contract GovImp is
         uint256 threshold = getThreshold();
         if (
             accept >= threshold ||
-            reject >= threshold ||
-            (accept + reject) == 10000
+            reject >= threshold
         ) {
             finalizeVote(ballotIdx, ballotType, accept > reject, false);
         }
@@ -702,7 +705,6 @@ contract GovImp is
 
         nodeToMember[nNodeIdx] = newStaker;
         nodeIdxFromMember[newStaker] = nNodeIdx;
-        node.name = name;
         memberLength = nMemIdx;
         nodeLength = nNodeIdx;
         modifiedBlock = block.number;
@@ -1241,22 +1243,6 @@ contract GovImp is
         }
     }
 
-    function reInitV3(uint256[] memory indices, address[] memory newRewards) external reinitializer(3) onlyOwner{
-        unchecked {
-            for(uint256 i=0; i<indices.length;i++){
-                address oldReward = rewards[i];
-                address newReward = newRewards[i-1];
-                rewards[i] = newReward;
-                rewardIdx[newReward] = i;
-                rewardIdx[oldReward] = 0;
-            }
-        }
-        //for the testnet
-        checkNodeName[nodes[40].name] = true;
-        checkNodeEnode[nodes[40].enode] = true;
-        checkNodeIpPort[keccak256(abi.encodePacked(nodes[40].ip, nodes[40].port))] = true;
-    }
-
     function initMigration(
         address registry,
         uint256 oldModifiedBlock,
@@ -1268,9 +1254,10 @@ contract GovImp is
 
         modifiedBlock = oldModifiedBlock;
         transferOwnership(oldOwner);
+        emit GovDataMigrated(msg.sender);
     }
 
-    function migrateFromLegacy(address oldGov) external initializer returns (int256) {
+    function migrateFromLegacy(address oldGov) external initializer onlyOwner returns (int256) {
         __ReentrancyGuard_init();
         __Ownable_init();
 

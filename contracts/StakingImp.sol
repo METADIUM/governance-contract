@@ -17,7 +17,7 @@ contract StakingImp is GovChecker, UUPSUpgradeable, ReentrancyGuardUpgradeable, 
     mapping(address => uint256) private _balance;
     mapping(address => uint256) private _lockedBalance;
     uint256 private _totalLockedBalance;
-    bool private revoked = false;
+    bool private revoked;
 
     //====NXTMeta====//
     event Staked(address indexed payee, uint256 amount, uint256 total, uint256 available);
@@ -30,6 +30,7 @@ contract StakingImp is GovChecker, UUPSUpgradeable, ReentrancyGuardUpgradeable, 
     //====Phase2-Staking====//
     event DelegateStaked(address indexed payee, uint256 amount, address indexed ncp, uint256 ncpTotalLocked, uint256 userTotalLocked);
     event DelegateUnstaked(address indexed payee, uint256 amount, address indexed ncp, uint256 ncpTotalLocked, uint256 userTotalLocked);
+    event NCPAddrChanged(address indexed ncp);
 
     constructor(){
         _disableInitializers();
@@ -37,6 +38,7 @@ contract StakingImp is GovChecker, UUPSUpgradeable, ReentrancyGuardUpgradeable, 
 
     function init(address registry, bytes memory data) external initializer {
         _totalLockedBalance = 0;
+        revoked = false;
         // _transferOwnership(_msgSender());
         __ReentrancyGuard_init();
         __Ownable_init();
@@ -81,16 +83,16 @@ contract StakingImp is GovChecker, UUPSUpgradeable, ReentrancyGuardUpgradeable, 
      */
     function deposit() external override nonReentrant notRevoked payable {
         require(msg.value > 0, "Deposit amount should be greater than zero");
-
         _balance[msg.sender] = _balance[msg.sender] + msg.value;
 
         if(IGov(getGovAddress()).isMember(msg.sender)){
             uint256 minimum_staking = IEnvStorage(getEnvStorageAddress()).getStakingMin();
             //if minimum lock is going higher than current locked value, lock more
             if(minimum_staking > _lockedBalance[msg.sender] && availableBalanceOf(msg.sender) >= (minimum_staking - _lockedBalance[msg.sender])){
-                _lock(msg.sender, minimum_staking - _lockedBalance[msg.sender]);
+                uint256 curLockedBalance = _lockedBalance[msg.sender];
+                _lock(msg.sender, minimum_staking - curLockedBalance);
                 if(ncpStaking != address(0)){
-                    INCPStaking(ncpStaking).ncpDeposit(minimum_staking - _lockedBalance[msg.sender], payable(msg.sender));
+                    INCPStaking(ncpStaking).ncpDeposit(minimum_staking - curLockedBalance, payable(msg.sender));
                 }
             }
         }
@@ -123,7 +125,9 @@ contract StakingImp is GovChecker, UUPSUpgradeable, ReentrancyGuardUpgradeable, 
             require(succ, "Transfer to NCP staking failed");
             INCPStaking(ncpStaking).ncpWithdraw(amount, payable(msg.sender));
         } else {
-            payable(msg.sender).transfer(amount);
+            // payable(msg.sender).transfer(amount);
+            ( bool succ, ) = payable(msg.sender).call{value:amount}("");
+            require(succ, "Transfer to msg.sender failed");
         }
 
         emit Unstaked(msg.sender, amount, _balance[msg.sender], availableBalanceOf(msg.sender));
@@ -188,7 +192,7 @@ contract StakingImp is GovChecker, UUPSUpgradeable, ReentrancyGuardUpgradeable, 
     
     function _unlock(address payee, uint256 unlockAmount) internal {
         if (unlockAmount == 0) return;
-        // require(_lockedBalance[payee] >= unlockAmount, "Unlock amount should be equal or less than balance locked");
+        require(_lockedBalance[payee] >= unlockAmount, "Unlock amount should be equal or less than balance locked");
         _lockedBalance[payee] = _lockedBalance[payee] - unlockAmount;
         _totalLockedBalance = _totalLockedBalance - unlockAmount;
 
@@ -302,6 +306,7 @@ contract StakingImp is GovChecker, UUPSUpgradeable, ReentrancyGuardUpgradeable, 
     function setNCPStaking(address _ncpStaking) external onlyOwner {
         require(_ncpStaking != address(0), "NCPStaking is the zero address");
         ncpStaking = _ncpStaking;
+        emit NCPAddrChanged(_ncpStaking);
     }
 
     /**
@@ -319,7 +324,8 @@ contract StakingImp is GovChecker, UUPSUpgradeable, ReentrancyGuardUpgradeable, 
 
         uint256 minimum_staking = IEnvStorage(getEnvStorageAddress()).getStakingMin();
         uint256 maximum_staking = IEnvStorage(getEnvStorageAddress()).getStakingMax();
-        require(minimum_staking <= _lockedBalance[ncp] && (_lockedBalance[ncp] + userDepositValue) <= maximum_staking, "user should be in staking range");
+        require(minimum_staking <= _lockedBalance[ncp], "ncp lockedBalance should be greater than minimum_staking");
+        require(_lockedBalance[ncp] + userDepositValue <= maximum_staking, "ncp lockedBalance + userDepositValue should be in staking range");
         _lock(ncp, userDepositValue);
 
         _lockedUserBalanceToNCP[ncp][msg.sender] = _lockedUserBalanceToNCP[ncp][msg.sender] + userDepositValue;
@@ -356,7 +362,7 @@ contract StakingImp is GovChecker, UUPSUpgradeable, ReentrancyGuardUpgradeable, 
         return _totalLockedBalance;
     }
 
-    function migrateFromLegacy(address registry, address oldGov, address oldStaking) external initializer {
+    function migrateFromLegacy(address registry, address oldGov, address oldStaking) external initializer onlyOwner {
         require(registry != address(0) && oldGov != address(0) && oldStaking != address(0), "address is the zero address");
 
         _totalLockedBalance = 0;
