@@ -34,6 +34,11 @@ contract GovImp is
 
     address constant ZERO = address(0);
 
+    // Voting constants
+    uint256 public constant THRESHOLD_NUMERATOR = 5001;
+    uint256 public constant THRESHOLD_DENOMINATOR = 10000;
+    uint256 public constant VOTING_WEIGHT_SCALE = 10000;
+
     event MemberAdded(address indexed addr, address indexed voter);
     event MemberRemoved(address indexed addr, address indexed voter);
     event MemberChanged(
@@ -506,32 +511,35 @@ contract GovImp is
     }
 
     function getThreshold() public pure returns (uint256) {
-        return 5001;
-    } // 50.01% from 5001 of 10000
-
-    function checkUnfinalized() public view returns (bool) {
-        if (ballotInVoting != 0) {
-            (, uint256 state, ) = getBallotState(ballotInVoting);
-            (, uint256 endTime, ) = getBallotPeriod(ballotInVoting);
-            if (state == uint256(BallotStates.InProgress)) {
-                if (endTime < block.timestamp) return false;
-                // require(endTime > block.timestamp, "Expired");
-                // require(ballotIdx == ballotInVoting, "Now in voting with different ballot");
-                // if (endTime < block.timestamp) {
-
-                //     finalizeBallot(ballotInVoting, uint256(BallotStates.Rejected));
-                //     ballotInVoting = 0;
-                //     // console.log("vote is finalized %s", ballotInVoting);
-                // } else if (ballotIdx != ballotInVoting) {
-                //     revert("Now in voting with different ballot");
-                // }
-            }
-        }
-        return true;
+        return THRESHOLD_NUMERATOR; // 50.01% from 5001 of 10000
     }
 
+    /// @notice Checks if there is an active voting that hasn't expired
+    /// @return true if no active voting or voting is still in progress, false if voting has expired
+    function checkUnfinalized() public view returns (bool) {
+        if (ballotInVoting == 0) {
+            return true;
+        }
+        
+        (, uint256 state, ) = getBallotState(ballotInVoting);
+        if (state != uint256(BallotStates.InProgress)) {
+            return true;
+        }
+        
+        (, uint256 endTime, ) = getBallotPeriod(ballotInVoting);
+        return endTime >= block.timestamp;
+    }
+
+    /// @notice Finalizes an expired vote that hasn't been automatically finalized
+    /// @dev Only callable by governance members. Should be called when a vote has expired
+    ///      but wasn't automatically finalized (e.g., due to gas limits)
     function finalizeEndedVote() public onlyGovMem {
+        require(ballotInVoting != 0, "No active voting");
         require(!checkUnfinalized(), "Voting is not ended");
+        
+        (, uint256 state, ) = getBallotState(ballotInVoting);
+        require(state == uint256(BallotStates.InProgress), "Vote is not in progress");
+        
         finalizeBallot(ballotInVoting, uint256(BallotStates.Rejected));
         ballotInVoting = 0;
     }
@@ -577,7 +585,10 @@ contract GovImp is
     function createVote(uint256 ballotIdx, bool approval) private {
         uint256 voteIdx = voteLength + 1;
         address staker = getStakerAddr(msg.sender);
-        uint256 weight = 10000 / getMemberLength(); //IStaking(getStakingAddress()).calcVotingWeightWithScaleFactor(staker, 10000);
+        require(staker != ZERO, "Invalid staker address");
+        uint256 memberLen = getMemberLength();
+        require(memberLen > 0, "No members");
+        uint256 weight = VOTING_WEIGHT_SCALE / memberLen; // Equal weight: 10000 / memberLength
         uint256 decision = approval
             ? uint256(DecisionTypes.Accept)
             : uint256(DecisionTypes.Reject);
@@ -731,36 +742,59 @@ contract GovImp is
             return; // Non-member. it is abnormal case, but passed
         }
 
-        // Remove voting and reward member
+        // Remove member from arrays
         uint256 removeIdx = stakerIdx[oldStaker];
-        address endAddr = stakers[memberLength];
         address oldVoter = voters[removeIdx];
         address oldReward = rewards[removeIdx];
 
-        if (stakerIdx[oldStaker] != memberLength) {
-            (
-                stakers[removeIdx],
-                stakers[memberLength],
-                stakerIdx[oldStaker],
-                stakerIdx[endAddr]
-            ) = (stakers[memberLength], ZERO, 0, stakerIdx[oldStaker]);
-            removeIdx = rewardIdx[oldStaker];
-            endAddr = rewards[memberLength];
-            (
-                rewards[removeIdx],
-                rewards[memberLength],
-                rewardIdx[oldReward],
-                rewardIdx[endAddr]
-            ) = (rewards[memberLength], ZERO, 0, rewardIdx[oldReward]);
-            removeIdx = voterIdx[oldStaker];
-            endAddr = voters[memberLength];
-            (
-                voters[removeIdx],
-                voters[memberLength],
-                voterIdx[oldVoter],
-                voterIdx[endAddr]
-            ) = (voters[memberLength], ZERO, 0, voterIdx[oldVoter]);
+        _removeMemberFromArrays(removeIdx, oldStaker, oldVoter, oldReward);
+        
+        // Remove node
+        _removeNode(oldStaker, removeIdx);
+        
+        modifiedBlock = block.number;
+        // Unlock and transfer remained to governance
+        transferLockedAndUnlock(oldStaker, unlockAmount);
+
+        emit MemberRemoved(oldStaker, oldVoter);
+    }
+
+    /// @notice Removes a member from stakers, voters, and rewards arrays
+    /// @param removeIdx Index of the member to remove
+    /// @param oldStaker Address of the staker to remove
+    /// @param oldVoter Address of the voter to remove
+    /// @param oldReward Address of the reward recipient to remove
+    function _removeMemberFromArrays(
+        uint256 removeIdx,
+        address oldStaker,
+        address oldVoter,
+        address oldReward
+    ) private {
+        if (removeIdx != memberLength) {
+            // Swap with last element
+            address endStaker = stakers[memberLength];
+            address endVoter = voters[memberLength];
+            address endReward = rewards[memberLength];
+
+            // Update stakers array
+            stakers[removeIdx] = endStaker;
+            stakerIdx[endStaker] = removeIdx;
+            stakers[memberLength] = ZERO;
+            stakerIdx[oldStaker] = 0;
+
+            // Update rewards array
+            rewards[removeIdx] = endReward;
+            rewardIdx[endReward] = removeIdx;
+            rewards[memberLength] = ZERO;
+            rewardIdx[oldReward] = 0;
+
+            // Update voters array
+            voters[removeIdx] = endVoter;
+            voterIdx[endVoter] = removeIdx;
+            voters[memberLength] = ZERO;
+            voterIdx[oldVoter] = 0;
         } else {
+            // Remove last element
             stakers[memberLength] = ZERO;
             stakerIdx[oldStaker] = 0;
             rewards[memberLength] = ZERO;
@@ -768,34 +802,42 @@ contract GovImp is
             voters[memberLength] = ZERO;
             voterIdx[oldVoter] = 0;
         }
-        memberLength = memberLength - 1;
-        // Remove node
+        unchecked {
+            memberLength = memberLength - 1;
+        }
+    }
 
-        Node storage node = nodes[removeIdx];
+    /// @notice Removes a node from the nodes array
+    /// @param oldStaker Address of the staker whose node to remove
+    /// @param removeIdx Index of the member being removed
+    function _removeNode(address oldStaker, uint256 removeIdx) private {
+        uint256 nodeIdx = nodeIdxFromMember[oldStaker];
+        Node storage node = nodes[nodeIdx];
+        
+        // Clear node checks
         checkNodeEnode[node.enode] = false;
         checkNodeName[node.name] = false;
         checkNodeIpPort[keccak256(abi.encodePacked(node.ip, node.port))] = false;
-        if (nodeIdxFromMember[oldStaker] != nodeLength) {
-            removeIdx = nodeIdxFromMember[oldStaker];
-            endAddr = nodeToMember[nodeLength];
 
+        if (nodeIdx != nodeLength) {
+            // Swap with last element
+            address endMember = nodeToMember[nodeLength];
+            
             node.name = nodes[nodeLength].name;
             node.enode = nodes[nodeLength].enode;
             node.ip = nodes[nodeLength].ip;
             node.port = nodes[nodeLength].port;
 
-            nodeToMember[removeIdx] = endAddr;
-            nodeIdxFromMember[endAddr] = removeIdx;
+            nodeToMember[nodeIdx] = endMember;
+            nodeIdxFromMember[endMember] = nodeIdx;
         }
+        
         nodeToMember[nodeLength] = ZERO;
         nodeIdxFromMember[oldStaker] = 0;
         delete nodes[nodeLength];
-        nodeLength = nodeLength - 1;
-        modifiedBlock = block.number;
-        // Unlock and transfer remained to governance
-        transferLockedAndUnlock(oldStaker, unlockAmount);
-
-        emit MemberRemoved(oldStaker, oldVoter);
+        unchecked {
+            nodeLength = nodeLength - 1;
+        }
     }
 
     function checkChangeMember(
@@ -1163,8 +1205,13 @@ contract GovImp is
     }
 
     function getStakerAddr(address _addr) public view returns (address staker) {
-        if (isStaker(_addr)) staker = _addr;
-        else if (isVoter(_addr)) staker = stakers[voterIdx[_addr]];
+        if (isStaker(_addr)) {
+            staker = _addr;
+        } else if (isVoter(_addr)) {
+            staker = stakers[voterIdx[_addr]];
+        } else {
+            revert("Address is not a staker or voter");
+        }
     }
 
     function setProposalTimePeriod(uint256 newPeriod) external onlyOwner {
@@ -1234,7 +1281,8 @@ contract GovImp is
 
     function reInit() external reinitializer(2) onlyOwner{
         unchecked {
-            for(uint256 i=0; i<getMemberLength();i++){
+            // Note: nodes and members are 1-indexed
+            for(uint256 i = 1; i <= getMemberLength(); i++){
                 Node memory node = nodes[i];
                 checkNodeName[node.name] = true;
                 checkNodeEnode[node.enode] = true;

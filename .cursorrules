@@ -1,0 +1,41 @@
+# Cursor Rules for Governance Contract
+
+## Git Workflow Rules
+
+1. **커밋 전 필수 작업**:
+   - TODO history를 README.md에 반드시 업데이트해야 함
+   - 날짜는 항상 정확하게 기록 (YYYY-MM-DD 형식)
+   - 커밋 전에 README.md의 TODO history 섹션을 확인하고 업데이트
+
+2. **날짜 기록 규칙**:
+   - 모든 날짜는 YYYY-MM-DD 형식으로 기록
+   - 현재 날짜는 `date +%Y-%m-%d` 명령어로 정확하게 확인
+   - TODO history에 날짜를 반드시 포함
+
+3. **커밋 및 푸시 규칙**:
+   - 커밋과 푸시를 진행하기 전에 반드시 사용자에게 최종 확인을 받아야 함
+   - 사용자가 명시적으로 승인한 경우에만 커밋 및 푸시 진행
+   - 커밋 메시지는 변경사항을 명확하게 설명
+
+4. **저장소 초기화 규칙**:
+   - 로컬 저장소가 없으면 `git init` 먼저 실행
+   - 원격 저장소가 없으면 생성하고 커밋 푸시 진행
+   - 원격 저장소 URL은 사용자에게 확인 후 설정
+
+5. **TODO History 업데이트 형식**:
+   ```markdown
+   ## TODO History
+   
+   ### YYYY-MM-DD
+   - [완료] 작업 내용 설명
+   - [진행중] 작업 내용 설명
+   - [대기] 작업 내용 설명
+   ```
+
+## Code Quality Rules
+
+- 모든 Solidity 코드는 보안 모범 사례를 따름
+- 매직 넘버는 상수로 정의
+- 함수는 명확한 주석과 NatSpec 포함
+- 가스 최적화를 고려한 코드 작성
+
